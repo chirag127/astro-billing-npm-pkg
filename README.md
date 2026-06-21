@@ -2,11 +2,10 @@
 
 [![npm](https://img.shields.io/npm/v/@chirag127/astro-billing.svg)](https://www.npmjs.com/package/@chirag127/astro-billing)
 [![CI](https://github.com/chirag127/astro-billing-npm-pkg/actions/workflows/ci.yml/badge.svg)](https://github.com/chirag127/astro-billing-npm-pkg/actions/workflows/ci.yml)
-[![license: source-available](https://img.shields.io/badge/license-source--available-red.svg)](./LICENSE)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 Razorpay checkout + license-key verify + <Paywall> + <PriceTag> for one-subscription-unlocks-all.
 
-> **License notice.** Source-available **only for transparency**. No license is granted to use, fork, modify, or redistribute. See [`LICENSE`](./LICENSE).
 
 Part of the [`chirag127/oriz`](https://github.com/chirag127/oriz) family.
 

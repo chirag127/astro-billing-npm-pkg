@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Razorpay checkout + license-key verify + <Paywall> + <PriceTag> for one-subscription-unlocks-all.",
   "type": "module",
-  "license": "SEE LICENSE IN LICENSE",
+  "license": "MIT",
   "author": "Chirag Singhal <chirag@oriz.in>",
   "homepage": "https://github.com/chirag127/astro-billing-npm-pkg#readme",
   "repository": { "type": "git", "url": "git+https://github.com/chirag127/astro-billing-npm-pkg.git" },
