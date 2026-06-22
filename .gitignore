@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.astro/
+
+# env (synced from master c:/D/oriz/.env via sops + age)
+.env
+.env.local
+.env.*.local
+.sops-age-key.txt
