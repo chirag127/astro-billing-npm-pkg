@@ -1,0 +1,124 @@
+---
+/*
+ * <CheckoutButton planTier="pro_monthly" label="Subscribe" />
+ *
+ * Client-side island. On click:
+ *   1. POST /api/billing-create-subscription { planTier, userId? }
+ *   2. Get { subscription_id, key_id }
+ *   3. Open Razorpay Checkout JS modal with that subscription_id
+ *
+ * The Razorpay Checkout JS is injected once per page via a guarded
+ * <script src="..."> below; if multiple <CheckoutButton /> instances
+ * are rendered Astro de-dupes the import.
+ *
+ * userId is read from window.firebaseUser?.uid at click time — if the
+ * user isn't signed in, we redirect to /sign-in?next=/pricing first.
+ */
+interface Props {
+  planTier: 'pro_monthly' | 'pro_yearly' | 'max_monthly' | 'max_yearly'
+  label?: string
+  class?: string
+}
+
+const { planTier, label = 'Subscribe', class: className } = Astro.props
+---
+
+<button
+  type="button"
+  class:list={['rzp-checkout-btn', className]}
+  data-plan-tier={planTier}
+>
+  {label}
+</button>
+
+<script>
+  // Razorpay Checkout SDK loader — idempotent across multiple buttons.
+  function loadRazorpay(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      // @ts-ignore — runtime global
+      if (typeof window !== 'undefined' && (window as any).Razorpay) return resolve()
+      const s = document.createElement('script')
+      s.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      s.onload = () => resolve()
+      s.onerror = () => reject(new Error('Failed to load Razorpay'))
+      document.head.appendChild(s)
+    })
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('.rzp-checkout-btn').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const planTier = btn.dataset.planTier
+      // @ts-ignore — set by host app's Firebase Auth integration
+      const user = (window as any).firebaseUser
+      if (!user) {
+        location.href = '/sign-in?next=/pricing'
+        return
+      }
+
+      btn.disabled = true
+      btn.dataset.originalLabel = btn.textContent ?? ''
+      btn.textContent = 'Loading…'
+
+      try {
+        await loadRazorpay()
+
+        const idToken = await user.getIdToken?.()
+        const res = await fetch('/api/billing-create-subscription', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            authorization: `Bearer ${idToken ?? ''}`,
+          },
+          body: JSON.stringify({ planTier }),
+        })
+        if (!res.ok) throw new Error(`create-subscription returned ${res.status}`)
+        const { subscription_id, key_id } = await res.json()
+
+        // @ts-ignore — Razorpay global from checkout.js
+        const rzp = new (window as any).Razorpay({
+          key: key_id,
+          subscription_id,
+          name: 'Oriz',
+          description: 'Subscription',
+          prefill: {
+            email: user.email ?? '',
+            name: user.displayName ?? '',
+          },
+          theme: { color: '#E0492F' },
+          handler: () => {
+            // Webhook is the source of truth — we just close + redirect.
+            location.href = '/account?welcome=pro'
+          },
+          modal: {
+            ondismiss: () => {
+              btn.disabled = false
+              btn.textContent = btn.dataset.originalLabel ?? 'Subscribe'
+            },
+          },
+        })
+        rzp.open()
+      } catch (err) {
+        console.error('[CheckoutButton]', err)
+        btn.disabled = false
+        btn.textContent = btn.dataset.originalLabel ?? 'Subscribe'
+        alert('Checkout failed. Please try again.')
+      }
+    })
+  })
+</script>
+
+<style>
+  .rzp-checkout-btn {
+    background: var(--accent, #E0492F);
+    color: #fff;
+    border: 0;
+    padding: 0.625rem 1.25rem;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: opacity 0.15s ease;
+  }
+  .rzp-checkout-btn:hover { opacity: 0.92 }
+  .rzp-checkout-btn:disabled { opacity: 0.6; cursor: wait }
+</style>

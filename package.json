@@ -1,18 +1,33 @@
 {
   "name": "@chirag127/astro-billing",
-  "version": "0.1.0",
-  "description": "Razorpay checkout + license-key verify + <Paywall> + <PriceTag> for one-subscription-unlocks-all.",
+  "version": "0.1.1",
+  "description": "Razorpay checkout (single-domain on oriz.in) + 3-tier <Pricing /> + Firestore webhook for the oriz family.",
   "type": "module",
   "license": "MIT",
   "author": "Chirag Singhal <chirag@oriz.in>",
   "homepage": "https://github.com/chirag127/astro-billing-npm-pkg#readme",
   "repository": { "type": "git", "url": "git+https://github.com/chirag127/astro-billing-npm-pkg.git" },
   "bugs": { "url": "https://github.com/chirag127/astro-billing-npm-pkg/issues" },
-  "keywords": ["chirag127", "oriz"],
+  "keywords": ["chirag127", "oriz", "razorpay", "billing", "astro"],
   "files": ["src", "LICENSE", "README.md"],
   "main": "./src/index.ts",
   "types": "./src/index.ts",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts",
+    "./Pricing.astro": "./src/components/Pricing.astro",
+    "./CheckoutButton.astro": "./src/components/CheckoutButton.astro",
+    "./api/create-subscription": "./src/api/billing-create-subscription.ts",
+    "./api/webhook": "./src/api/billing-webhook/razorpay.ts",
+    "./tiers": "./src/data/tiers.ts",
+    "./razorpay-client": "./src/lib/razorpay-client.ts"
+  },
+  "peerDependencies": {
+    "astro": "^6.0.0"
+  },
+  "dependencies": {
+    "razorpay": "^2.9.6",
+    "firebase-admin": "^13.0.0"
+  },
   "publishConfig": { "access": "public" },
   "scripts": {
     "test": "vitest run",
