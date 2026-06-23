@@ -3,16 +3,21 @@
  * <CheckoutButton planTier="pro_monthly" label="Subscribe" />
  *
  * Client-side island. On click:
- *   1. POST /api/billing-create-subscription { planTier, userId? }
- *   2. Get { subscription_id, key_id }
- *   3. Open Razorpay Checkout JS modal with that subscription_id
+ *   1. Check for cross-domain auth via the `oriz_auth` cookie at `.oriz.in`
+ *      (set by account.oriz.in on sign-in). If absent → redirect to
+ *      account.oriz.in/sign-in?return=<current-url>.
+ *   2. POST /api/billing-create-subscription { planTier } with the cookie's
+ *      idToken if present (server side validates via Firebase Admin REST).
+ *   3. Get { subscription_id, key_id }
+ *   4. Open Razorpay Checkout JS modal with that subscription_id.
  *
  * The Razorpay Checkout JS is injected once per page via a guarded
  * <script src="..."> below; if multiple <CheckoutButton /> instances
  * are rendered Astro de-dupes the import.
  *
- * userId is read from window.firebaseUser?.uid at click time — if the
- * user isn't signed in, we redirect to /sign-in?next=/pricing first.
+ * Auth flow: we read the family-wide `oriz_auth` cookie set by
+ * account.oriz.in. The cookie stores the Firebase ID token + user metadata.
+ * No local Firebase SDK init required on the host page — just the cookie.
  */
 interface Props {
   planTier: 'pro_monthly' | 'pro_yearly' | 'max_monthly' | 'max_yearly'
@@ -32,6 +37,39 @@ const { planTier, label = 'Subscribe', class: className } = Astro.props
 </button>
 
 <script>
+  const AUTH_ORIGIN = 'https://account.oriz.in'
+  const AUTH_COOKIE = 'oriz_auth'
+
+  interface AuthUser {
+    uid?: string
+    email?: string
+    displayName?: string
+    idToken?: string
+    exp?: number
+  }
+
+  /** Read the family-wide auth cookie set by account.oriz.in. */
+  function readAuthCookie(): AuthUser | null {
+    const raw = document.cookie
+      .split('; ')
+      .find((row) => row.startsWith(`${AUTH_COOKIE}=`))
+    if (!raw) return null
+    try {
+      const value = decodeURIComponent(raw.slice(AUTH_COOKIE.length + 1))
+      const user = JSON.parse(value) as AuthUser
+      if (user.exp && user.exp * 1000 < Date.now()) return null
+      return user
+    } catch {
+      return null
+    }
+  }
+
+  /** Bounce to central sign-in with a return URL. */
+  function bounceToSignIn(): void {
+    const ret = encodeURIComponent(window.location.href)
+    window.location.href = `${AUTH_ORIGIN}/sign-in?return=${ret}`
+  }
+
   // Razorpay Checkout SDK loader — idempotent across multiple buttons.
   function loadRazorpay(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -48,10 +86,11 @@ const { planTier, label = 'Subscribe', class: className } = Astro.props
   document.querySelectorAll<HTMLButtonElement>('.rzp-checkout-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const planTier = btn.dataset.planTier
-      // @ts-ignore — set by host app's Firebase Auth integration
-      const user = (window as any).firebaseUser
+
+      // 1. Auth check via cross-domain cookie (set by account.oriz.in).
+      const user = readAuthCookie()
       if (!user) {
-        location.href = '/sign-in?next=/pricing'
+        bounceToSignIn()
         return
       }
 
@@ -62,18 +101,27 @@ const { planTier, label = 'Subscribe', class: className } = Astro.props
       try {
         await loadRazorpay()
 
-        const idToken = await user.getIdToken?.()
+        // 2. Create subscription server-side. Send idToken from cookie
+        //    (if present) so the Pages Function can verify the user.
         const res = await fetch('/api/billing-create-subscription', {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
-            authorization: `Bearer ${idToken ?? ''}`,
+            authorization: user.idToken ? `Bearer ${user.idToken}` : '',
           },
           body: JSON.stringify({ planTier }),
         })
-        if (!res.ok) throw new Error(`create-subscription returned ${res.status}`)
+        if (!res.ok) {
+          // Token expired? Cookie tampered? Bounce to sign-in.
+          if (res.status === 401) {
+            bounceToSignIn()
+            return
+          }
+          throw new Error(`create-subscription returned ${res.status}`)
+        }
         const { subscription_id, key_id } = await res.json()
 
+        // 3. Open Razorpay modal.
         // @ts-ignore — Razorpay global from checkout.js
         const rzp = new (window as any).Razorpay({
           key: key_id,
@@ -86,7 +134,7 @@ const { planTier, label = 'Subscribe', class: className } = Astro.props
           },
           theme: { color: '#E0492F' },
           handler: () => {
-            // Webhook is the source of truth — we just close + redirect.
+            // Webhook is the source of truth — close modal + redirect.
             location.href = '/account?welcome=pro'
           },
           modal: {
