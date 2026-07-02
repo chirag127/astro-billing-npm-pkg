@@ -13,7 +13,7 @@ jobs:
       - uses: pnpm/action-setup@v4
         with: { version: 10 }
       - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: pnpm, registry-url: 'https://registry.npmjs.org' }
+        with: { node-version: 22, registry-url: 'https://registry.npmjs.org' }
       - run: pnpm install --frozen-lockfile=false
       - run: npm publish --access public --provenance
         env:
